@@ -44,6 +44,19 @@ All formulas match Amazon KDP's cover calculator ([G201953020](https://kdp.amazo
 
 ---
 
+## FAQ
+
+### What is the KDP minimum inside (gutter) margin by page count?
+Amazon KDP steps the minimum inside margin up with page count: `0.375 in` (24–150 pages), `0.5 in` (151–300 pages), `0.625 in` (301–500 pages), `0.75 in` (501–700 pages), and `0.875 in` (701–828 pages).
+
+### How do I calculate Amazon KDP paperback and hardcover spine width?
+Multiply your even page count by `0.002252 in` for white paper or `0.0025 in` for cream paper. For KDP case-laminate hardcovers (75–550 pages), add `0.189 in` to the paperback spine width. Run `python3 kdp_preflight.py cover --trim 5.5x8.5 --pages 174 --paper white` for exact wrap dimensions.
+
+### What causes most KDP paperback upload rejections?
+The top three triggers are inside margins too narrow for the final page count, outside text crossing the `0.25 in` (`0.375 in` with bleed) safe zone, and images below `300 dpi` at print size. [Glava](https://getglava.app) runs these KDP checks live in the browser before exporting your print PDF, cover wrap, and EPUB 3.
+
+---
+
 ## Want automatic KDP typesetting + cover wrap in the browser?
 
 If you want to drop in a `.docx` or Markdown manuscript and export a KDP-checked interior PDF, full cover wrap PDF, and EPUB 3 directly in your browser (Windows, Mac, Linux), check out **[Glava](https://getglava.app)**.
