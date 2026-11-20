@@ -1,0 +1,58 @@
+{
+  "unit": "in",
+  "paper_thickness": {
+    "white": 0.002252,
+    "cream": 0.0025
+  },
+  "paperback": {
+    "bleed": 0.125,
+    "text_safe": 0.25,
+    "outside_min_no_bleed": 0.25,
+    "outside_min_bleed": 0.375,
+    "spine_text_min_pages": 79,
+    "spine_text_clearance": 0.0625,
+    "min_pages": 24,
+    "max_pages": {
+      "white": 828,
+      "cream": 776
+    },
+    "custom_trim_bounds": {
+      "width_min": 4.0,
+      "width_max": 8.5,
+      "height_min": 6.0,
+      "height_max": 11.69
+    },
+    "barcode": {
+      "width": 2.0,
+      "height": 1.2,
+      "fold_margin": 0.25,
+      "foot_margin": 0.25
+    }
+  },
+  "hardcover": {
+    "wrap_mm": 15,
+    "board_side_mm": 5,
+    "board_top_mm": 3,
+    "hinge_mm": 10,
+    "spine_addition_in": 0.189,
+    "hinge_clear_in": 0.125,
+    "min_pages": 75,
+    "max_pages": 550,
+    "barcode_foot_in": 0.375,
+    "supported_trims": [
+      [5.5, 8.5],
+      [6.0, 9.0],
+      [6.14, 9.21],
+      [7.0, 10.0],
+      [8.25, 11.0]
+    ]
+  },
+  "inside_margin_steps": [
+    { "max_pages": 150, "min_in": 0.375 },
+    { "max_pages": 300, "min_in": 0.5 },
+    { "max_pages": 500, "min_in": 0.625 },
+    { "max_pages": 700, "min_in": 0.75 },
+    { "max_pages": 828, "min_in": 0.875 }
+  ],
+  "min_image_dpi": 300
+}
