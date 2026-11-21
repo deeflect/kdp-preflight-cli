@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kdp-preflight-cli"
+version = "0.1.0"
+description = "Zero-dependency Amazon KDP spine, cover-wrap, margin, and preflight CLI for paperback and hardcover books."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Dmitry (Dee) Kargaev", email = "hi@deeflect.com" }]
+keywords = ["amazon-kdp", "kdp", "book-formatting", "publishing", "cover-calculator", "preflight", "cli"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Homepage = "https://getglava.app"
+Repository = "https://github.com/deeflect/kdp-preflight-cli"
+Issues = "https://github.com/deeflect/kdp-preflight-cli/issues"
+
+[project.scripts]
+kdp-preflight = "kdp_preflight:main"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["kdp_preflight.py", "kdp-rules.json"]
+
+[tool.hatch.build.targets.sdist]
+include = ["kdp_preflight.py", "kdp-rules.json", "test_kdp_preflight.py", "README.md", "LICENSE", "pyproject.toml"]

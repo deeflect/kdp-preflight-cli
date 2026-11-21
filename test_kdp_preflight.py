@@ -1,4 +1,7 @@
+import tempfile
 import unittest
+import zlib
+from pathlib import Path
 
 import kdp_preflight as kdp
 
@@ -48,6 +51,41 @@ class TestKdpPreflight(unittest.TestCase):
         checks = kdp.run_preflight(5.0, 8.0, 120, paper="white", binding="hardcover")
         by_id = {c["id"]: c["ok"] for c in checks}
         self.assertFalse(by_id["hardcover-trim"])
+
+    def test_inspect_pdf_reads_pages_and_trim_size(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pdf = Path(tmp) / "book.pdf"
+            pdf.write_bytes(
+                b"%PDF-1.4\n"
+                b"1 0 obj << /Type /Pages /Count 174 >> endobj\n"
+                b"2 0 obj << /Type /Page /MediaBox [0 0 396 612] >> endobj\n"
+                b"%%EOF\n"
+            )
+            info = kdp.inspect_pdf(pdf)
+            self.assertEqual(info["pages"], 174)
+            self.assertEqual(info["size_in"], [5.5, 8.5])
+            self.assertFalse(info["mixed_page_sizes"])
+            self.assertEqual(kdp.main(["pdf", str(pdf), "--paper", "white", "--json"]), 0)
+
+    def test_inspect_pdf_reads_compressed_objstm_and_flags_mixed_sizes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pdf = Path(tmp) / "compressed.pdf"
+            inner = zlib.compress(
+                b"<< /Type /Pages /Count 200 >> "
+                b"<< /Type /Page /MediaBox [0 0 432 648] >> "
+                b"<< /Type /Page /MediaBox [0 0 612 792] >>"
+            )
+            pdf.write_bytes(
+                b"%PDF-1.5\n1 0 obj << /Type /ObjStm /Filter /FlateDecode /Length "
+                + str(len(inner)).encode()
+                + b" >>\nstream\n"
+                + inner
+                + b"\nendstream\nendobj\n%%EOF\n"
+            )
+            info = kdp.inspect_pdf(pdf)
+            self.assertEqual(info["pages"], 200)
+            self.assertTrue(info["mixed_page_sizes"])
+            self.assertEqual(kdp.main(["pdf", str(pdf), "--paper", "cream"]), 1)
 
 
 if __name__ == "__main__":

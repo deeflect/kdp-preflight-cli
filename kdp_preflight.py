@@ -6,16 +6,19 @@ Matches Amazon KDP paperback and hardcover (case laminate) specifications:
 - https://kdp.amazon.com/en_US/help/topic/G201834180
 
 Usage:
-  python3 kdp_preflight.py cover --trim 5.5x8.5 --pages 174 --paper white
-  python3 kdp_preflight.py cover --trim 6x9 --pages 300 --paper cream --binding hardcover
-  python3 kdp_preflight.py check --trim 6x9 --pages 320 --paper white --inside 0.5 --outside 0.5
+  kdp-preflight pdf manuscript.pdf --paper white
+  kdp-preflight cover --trim 5.5x8.5 --pages 174 --paper white
+  kdp-preflight cover --trim 6x9 --pages 300 --paper cream --binding hardcover
+  kdp-preflight check --trim 6x9 --pages 320 --paper white --inside 0.5 --outside 0.5
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -180,9 +183,77 @@ def run_preflight(
     return checks
 
 
+_PDF_BOX_RE = re.compile(rb"/(TrimBox|MediaBox)\s*\[\s*([+-]?\d+(?:\.\d+)?)\s+([+-]?\d+(?:\.\d+)?)\s+([+-]?\d+(?:\.\d+)?)\s+([+-]?\d+(?:\.\d+)?)\s*\]")
+_PDF_PAGES_COUNT_RE = re.compile(rb"/Type\s*/Pages\b[^>]*?/Count\s+(\d+)|/Count\s+(\d+)[^>]*?/Type\s*/Pages\b", re.S)
+_PDF_PAGE_LEAF_RE = re.compile(rb"/Type\s*/Page(?![A-Za-z])")
+_PDF_OBJSTM_RE = re.compile(rb"<<([^>]*/Type\s*/ObjStm[^>]*)>>\s*stream\r?\n(.*?)\r?\nendstream", re.S)
+
+
+def _extract_pdf_text_blobs(raw: bytes) -> list[bytes]:
+    blobs = [raw]
+    for m in _PDF_OBJSTM_RE.finditer(raw):
+        dict_bytes, stream_bytes = m.group(1), m.group(2)
+        if b"/FlateDecode" in dict_bytes:
+            try:
+                blobs.append(zlib.decompress(stream_bytes))
+            except zlib.error:
+                continue
+        else:
+            blobs.append(stream_bytes)
+    return blobs
+
+
+def inspect_pdf(path: Path) -> dict[str, Any]:
+    """Read page count and page trim dimensions (inches) from a PDF with zero third-party deps."""
+    raw = path.read_bytes()
+    if not raw.startswith(b"%PDF-"):
+        raise ValueError(f"Not a valid PDF file: {path}")
+
+    blobs = _extract_pdf_text_blobs(raw)
+    combined = b"\n".join(blobs)
+
+    counts = [int(m.group(1) or m.group(2)) for m in _PDF_PAGES_COUNT_RE.finditer(combined)]
+    leaf_pages = len(_PDF_PAGE_LEAF_RE.findall(combined))
+    pages = max(counts) if counts else leaf_pages
+    if pages <= 0:
+        raise ValueError(f"Could not determine page count in {path} (encrypted or unsupported PDF).")
+
+    trim_boxes: list[tuple[float, float]] = []
+    media_boxes: list[tuple[float, float]] = []
+    for m in _PDF_BOX_RE.finditer(combined):
+        kind = m.group(1)
+        x0, y0, x1, y1 = (float(m.group(i)) for i in (2, 3, 4, 5))
+        w_in = round(abs(x1 - x0) / 72.0, 3)
+        h_in = round(abs(y1 - y0) / 72.0, 3)
+        if w_in > 0 and h_in > 0:
+            (trim_boxes if kind == b"TrimBox" else media_boxes).append((w_in, h_in))
+
+    boxes = trim_boxes or media_boxes
+    if not boxes:
+        raise ValueError(f"Could not determine MediaBox/TrimBox dimensions in {path}.")
+
+    unique_sizes = sorted(set(boxes))
+    primary_w, primary_h = boxes[0]
+    return {
+        "file": str(path),
+        "pages": pages,
+        "box_source": "TrimBox" if trim_boxes else "MediaBox",
+        "size_in": [primary_w, primary_h],
+        "mixed_page_sizes": len(unique_sizes) > 1,
+        "unique_sizes_in": [[w, h] for w, h in unique_sizes],
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Amazon KDP spine, cover wrap, and preflight CLI.")
+    parser = argparse.ArgumentParser(description="Amazon KDP spine, cover wrap, PDF inspector, and preflight CLI.")
     sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_pdf = sub.add_parser("pdf", help="Inspect a real PDF file for page count, trim size, KDP cover wrap, and preflight checks.")
+    p_pdf.add_argument("file", type=Path, help="Path to interior PDF manuscript.")
+    p_pdf.add_argument("--paper", choices=["white", "cream"], default="white")
+    p_pdf.add_argument("--binding", choices=["paperback", "hardcover"], default="paperback")
+    p_pdf.add_argument("--bleed", action="store_true", help="PDF includes KDP bleed (+0.125 in width, +0.25 in height); subtracts bleed to infer trim size.")
+    p_pdf.add_argument("--json", action="store_true")
 
     p_cov = sub.add_parser("cover", help="Calculate KDP spine width, wrap dimensions, and minimum inside margin.")
     p_cov.add_argument("--trim", required=True, help="Trim size in inches, e.g. 5.5x8.5 or 6x9.")
@@ -204,6 +275,39 @@ def main(argv: list[str] | None = None) -> int:
     p_chk.add_argument("--json", action="store_true")
 
     args = parser.parse_args(argv)
+
+    if args.cmd == "pdf":
+        info = inspect_pdf(args.file)
+        raw_w, raw_h = info["size_in"]
+        tw = round(raw_w - (BLEED if args.bleed else 0.0), 3)
+        th = round(raw_h - (2 * BLEED if args.bleed else 0.0), 3)
+        cover = compute_cover(tw, th, info["pages"], args.paper, args.binding)
+        checks = run_preflight(tw, th, info["pages"], args.paper, args.binding, bleed=args.bleed)
+        if info["mixed_page_sizes"]:
+            checks.append({
+                "id": "uniform-page-size",
+                "ok": False,
+                "message": f"Mixed page sizes found in PDF: {info['unique_sizes_in']} in (KDP requires uniform trim).",
+            })
+        else:
+            checks.append({
+                "id": "uniform-page-size",
+                "ok": True,
+                "message": f"All pages share uniform {info['box_source']} size {raw_w} x {raw_h} in.",
+            })
+        if args.json:
+            print(json.dumps({"pdf": info, "cover": cover, "checks": checks}, indent=2))
+        else:
+            print(f"PDF:            {info['file']}")
+            print(f"Detected:       {info['pages']} pages · {raw_w} x {raw_h} in ({info['box_source']})")
+            print(f"Trim inferred:  {tw} x {th} in ({'bleed subtracted' if args.bleed else 'no bleed'})")
+            print(f"Spine width:    {cover['spine_in']:.3f} in ({args.binding}, {args.paper})")
+            print(f"Full cover:     {cover['wrap_width_in']:.3f} x {cover['wrap_height_in']:.3f} in")
+            print(f"Min inside mgn: {cover['min_inside_margin_in']} in")
+            for c in checks:
+                print(f"[{'PASS' if c['ok'] else 'FAIL'}] {c['id']}: {c['message']}")
+        return 0 if all(c["ok"] for c in checks) else 1
+
     tw, th = parse_pair(args.trim)
 
     if args.cmd == "cover":

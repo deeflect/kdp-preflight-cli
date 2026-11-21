@@ -7,17 +7,21 @@ Zero-dependency Python CLI and machine-readable JSON rules (`kdp-rules.json`) fo
 Requires Python 3.10+. No external packages.
 
 ```bash
-# Paperback cover wrap + spine calculation (5.5 × 8.5 in, 174 pages, white paper)
-python3 kdp_preflight.py cover --trim 5.5x8.5 --pages 174 --paper white
+# Run directly with uvx (or pip install kdp-preflight-cli)
+# 1. Inspect an actual exported PDF manuscript (page count, trim size, spine, wrap, KDP checks)
+uvx --from kdp-preflight-cli kdp-preflight pdf manuscript.pdf --paper white
 
-# Hardcover (case laminate) cover wrap (6 × 9 in, 300 pages, cream paper)
-python3 kdp_preflight.py cover --trim 6x9 --pages 300 --paper cream --binding hardcover
+# 2. Paperback cover wrap + spine calculation (5.5 × 8.5 in, 174 pages, white paper)
+kdp-preflight cover --trim 5.5x8.5 --pages 174 --paper white
 
-# Preflight check on margins, page range, trim, and image resolution
-python3 kdp_preflight.py check --trim 6x9 --pages 320 --paper white --inside 0.625 --outside 0.5 --image-px 1800x2700 --image-in 6x9
+# 3. Hardcover (case laminate) cover wrap (6 × 9 in, 300 pages, cream paper)
+kdp-preflight cover --trim 6x9 --pages 300 --paper cream --binding hardcover
 
-# JSON output for scripts or build pipelines
-python3 kdp_preflight.py cover --trim 6x9 --pages 250 --paper cream --json
+# 4. Preflight check on margins, page range, trim, and image resolution
+kdp-preflight check --trim 6x9 --pages 320 --paper white --inside 0.625 --outside 0.5 --image-px 1800x2700 --image-in 6x9
+
+# JSON output for scripts or build pipelines (also works standalone via `python3 kdp_preflight.py`)
+kdp-preflight pdf manuscript.pdf --paper cream --json
 ```
 
 ---
